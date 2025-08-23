@@ -71,17 +71,6 @@ class TranslationController extends Controller
     }
 
     /**
-     * Formatted out of the data
-     */
-    public function formatted(): JsonResponse
-    {
-        $translations = Translation::with(['locale', 'tags'])->get();
-        $normalized = self::formatData($translations);
-
-        return response()->json($normalized);
-    }
-
-    /**
      * Store or update a translation.
      */
     public function storeOrUpdate(TranslationRequest $request, ?Translation $translation = null): JsonResponse
