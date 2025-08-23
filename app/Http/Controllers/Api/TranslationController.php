@@ -8,6 +8,7 @@ use App\Models\Translation;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class TranslationController extends Controller
 {
@@ -22,50 +23,59 @@ class TranslationController extends Controller
         $keys     = $this->normalizeInput($request->key);
         $contents = $this->normalizeInput($request->content);
 
-        $formatResponse = $request->query('format', '0');
+        $formatResponse = (int) $request->query('format', '0');
 
-        $query = Translation::query()->with([
-            'locale',
-            'tags' => function ($q) use ($tags) {
+        $cacheKey = $this->generateCacheKey($locales, $tags, $keys, $contents, $formatResponse);
+        $translations = Cache::remember(
+            $cacheKey,
+            3600,
+            function () use ($locales, $tags, $keys, $contents, $formatResponse) {
+                $query = Translation::query()->with([
+                    'locale',
+                    'tags' => function ($q) use ($tags) {
+                        if ($tags) {
+                            $q->whereIn('tags.id', $tags);
+                        }
+                    }
+                ]);
+
+                // Locale filter
+                if ($locales) {
+                    $query->whereHas('locale', fn($q) => $q->whereIn('code', $locales));
+                }
+
+                // Tag filter (ensure translations have at least one tag)
                 if ($tags) {
-                    $q->whereIn('tags.id', $tags);
+                    $query->whereHas('tags', fn($q) => $q->whereIn('tags.id', $tags));
                 }
+
+                // Key filter
+                if ($keys) {
+                    $query->where(function ($q) use ($keys) {
+                        foreach ($keys as $key) {
+                            $q->orWhere('key', 'like', "%$key%");
+                        }
+                    });
+                }
+
+                // Content filter
+                if ($contents) {
+                    $query->where(function ($q) use ($contents) {
+                        foreach ($contents as $content) {
+                            $q->orWhere('content', 'like', "%$content%");
+                        }
+                    });
+                }
+
+                $translations = $query->get();
+
+                if ($formatResponse === 1) {
+                    $translations = self::formatData($translations, $tags);
+                }
+
+                return $translations;
             }
-        ]);
-
-        // Locale filter
-        if ($locales) {
-            $query->whereHas('locale', fn($q) => $q->whereIn('code', $locales));
-        }
-
-        // Tag filter (ensure translations have at least one tag)
-        if ($tags) {
-            $query->whereHas('tags', fn($q) => $q->whereIn('tags.id', $tags));
-        }
-
-        // Key filter
-        if ($keys) {
-            $query->where(function ($q) use ($keys) {
-                foreach ($keys as $key) {
-                    $q->orWhere('key', 'like', "%$key%");
-                }
-            });
-        }
-
-        // Content filter
-        if ($contents) {
-            $query->where(function ($q) use ($contents) {
-                foreach ($contents as $content) {
-                    $q->orWhere('content', 'like', "%$content%");
-                }
-            });
-        }
-
-        $translations = $query->get();
-
-        if ((int) $formatResponse === 1) {
-            $translations = self::formatData($translations, $tags);
-        }
+        );
 
         return response()->json($translations);
     }
@@ -84,6 +94,8 @@ class TranslationController extends Controller
             $translation->tags()->sync($request->input('tags'));
         }
 
+        $this->clearTranslationCache();
+
         return response()->json(
             Translation::with(['locale', 'tags'])->find($translation->id)
         );
@@ -97,13 +109,15 @@ class TranslationController extends Controller
         $translation->tags()->detach();
         $translation->delete();
 
+        $this->clearTranslationCache();
+
         return response()->json(['message' => 'Translation deleted']);
     }
 
     /**
      * Normalize translations into nested JSON by locale and tag.
      */
-    private function formatData($translations, $allowedTags = null): array
+    private function formatData(Collection $translations, $allowedTags = null): array
     {
         $normalized = [];
         foreach ($translations as $translation) {
@@ -141,5 +155,27 @@ class TranslationController extends Controller
     {
         if (!$input) return null;
         return is_array($input) ? $input : explode(',', $input);
+    }
+
+    /**
+     * Generate cache key for a given query.
+     */
+    private function generateCacheKey($locales, $tags, $keys, $contents, $format): string
+    {
+        return 'translations_' . md5(
+            implode(',', $locales ?? []) . '|' .
+                implode(',', $tags ?? []) . '|' .
+                implode(',', $keys ?? []) . '|' .
+                implode(',', $contents ?? []) . '|' .
+                $format
+        );
+    }
+
+    /**
+     * Clear all cached translation files (file or memory cache).
+     */
+    protected function clearTranslationCache(): void
+    {
+        Cache::flush();
     }
 }
