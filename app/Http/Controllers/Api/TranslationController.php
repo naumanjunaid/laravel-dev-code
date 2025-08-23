@@ -11,23 +11,16 @@ use Illuminate\Http\Request;
 
 class TranslationController extends Controller
 {
+    /**
+     * List translations with optional filters and nested export.
+     */
     public function index(Request $request)
     {
-        $locales = $request->has('locale')
-            ? (is_array($request->locale) ? $request->locale : explode(',', $request->locale))
-            : null;
-
-        $tags = $request->has('tag')
-            ? (is_array($request->tag) ? $request->tag : explode(',', $request->tag))
-            : null;
-
-        $keys = $request->has('key')
-            ? (is_array($request->key) ? $request->key : explode(',', $request->key))
-            : null;
-
-        $contents = $request->has('content')
-            ? (is_array($request->content) ? $request->content : explode(',', $request->content))
-            : null;
+        // Filters
+        $locales  = $this->normalizeInput($request->locale);
+        $tags     = $this->normalizeInput($request->tag);
+        $keys     = $this->normalizeInput($request->key);
+        $contents = $this->normalizeInput($request->content);
 
         $formatResponse = $request->query('format', '0');
 
@@ -77,6 +70,9 @@ class TranslationController extends Controller
         return response()->json($translations);
     }
 
+    /**
+     * Formatted out of the data
+     */
     public function formatted(): JsonResponse
     {
         $translations = Translation::with(['locale', 'tags'])->get();
@@ -85,6 +81,39 @@ class TranslationController extends Controller
         return response()->json($normalized);
     }
 
+    /**
+     * Store or update a translation.
+     */
+    public function storeOrUpdate(TranslationRequest $request, ?Translation $translation = null): JsonResponse
+    {
+        $translation = $translation ?? new Translation();
+        $translation->fill($request->validated());
+        $translation->save();
+
+        // Sync tags if provided
+        if ($request->has('tags')) {
+            $translation->tags()->sync($request->input('tags'));
+        }
+
+        return response()->json(
+            Translation::with(['locale', 'tags'])->find($translation->id)
+        );
+    }
+
+    /**
+     * Delete a translation.
+     */
+    public function destroy(Translation $translation): JsonResponse
+    {
+        $translation->tags()->detach();
+        $translation->delete();
+
+        return response()->json(['message' => 'Translation deleted']);
+    }
+
+    /**
+     * Normalize translations into nested JSON by locale and tag.
+     */
     private function formatData($translations, $allowedTags = null): array
     {
         $normalized = [];
@@ -116,27 +145,12 @@ class TranslationController extends Controller
         return $normalized;
     }
 
-    public function storeOrUpdate(TranslationRequest $request, ?Translation $translation = null): JsonResponse
+    /**
+     * Helper to convert comma-separated or array input into array.
+     */
+    private function normalizeInput($input): ?array
     {
-        $translation = $translation ?? new Translation();
-        $translation->fill($request->validated());
-        $translation->save();
-
-        // Sync tags if provided
-        if ($request->has('tags')) {
-            $translation->tags()->sync($request->input('tags'));
-        }
-
-        return response()->json(
-            Translation::with(['locale', 'tags'])->find($translation->id)
-        );
-    }
-
-    public function destroy(Translation $translation): JsonResponse
-    {
-        $translation->tags()->detach();
-        $translation->delete();
-
-        return response()->json(['message' => 'Translation deleted']);
+        if (!$input) return null;
+        return is_array($input) ? $input : explode(',', $input);
     }
 }
