@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\LocaleController;
 use App\Http\Controllers\Api\TagController;
+use App\Http\Controllers\Api\TranslationController;
 
 
 Route::get('locales', [LocaleController::class, 'index']);
@@ -14,3 +15,8 @@ Route::get('tags', [TagController::class, 'index']);
 Route::post('tags', [TagController::class, 'storeOrUpdate']);
 Route::put('tags/{tag}', [TagController::class, 'storeOrUpdate']);
 Route::delete('tags/{tag}', [TagController::class, 'destroy']);
+
+Route::get('translations', [TranslationController::class, 'index']);
+Route::post('translations', [TranslationController::class, 'storeOrUpdate']);
+Route::put('translations/{translation}', [TranslationController::class, 'storeOrUpdate']);
+Route::delete('translations/{translation}', [TranslationController::class, 'destroy']);
