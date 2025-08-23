@@ -176,6 +176,10 @@ class TranslationController extends Controller
      */
     protected function clearTranslationCache(): void
     {
+        // need a better way of cache busting but not botthered here
+        // to delete everything as we are only dealing with simple API
+        // otherwise need a mechanism to get the key of updated cache content
+        // and delete only that item
         Cache::flush();
     }
 }
