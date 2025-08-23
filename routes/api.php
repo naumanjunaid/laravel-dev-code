@@ -17,6 +17,7 @@ Route::put('tags/{tag}', [TagController::class, 'storeOrUpdate']);
 Route::delete('tags/{tag}', [TagController::class, 'destroy']);
 
 Route::get('translations', [TranslationController::class, 'index']);
+Route::get('translations/formatted', [TranslationController::class, 'formatted']);
 Route::post('translations', [TranslationController::class, 'storeOrUpdate']);
 Route::put('translations/{translation}', [TranslationController::class, 'storeOrUpdate']);
 Route::delete('translations/{translation}', [TranslationController::class, 'destroy']);
