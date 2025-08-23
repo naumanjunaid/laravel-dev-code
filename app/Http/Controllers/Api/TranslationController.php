@@ -13,44 +13,65 @@ class TranslationController extends Controller
 {
     public function index(Request $request)
     {
-        $hasLocale = $request->has('locale');
-        $hasTag = $request->has('tag');
-        $hasKey = $request->has('key');
-        $hasContent = $request->has('content');
+        $locales = $request->has('locale')
+            ? (is_array($request->locale) ? $request->locale : explode(',', $request->locale))
+            : null;
+
+        $tags = $request->has('tag')
+            ? (is_array($request->tag) ? $request->tag : explode(',', $request->tag))
+            : null;
+
+        $keys = $request->has('key')
+            ? (is_array($request->key) ? $request->key : explode(',', $request->key))
+            : null;
+
+        $contents = $request->has('content')
+            ? (is_array($request->content) ? $request->content : explode(',', $request->content))
+            : null;
+
         $formatResponse = $request->query('format', '0');
 
-        $query = Translation::with(['locale', 'tags']);
-
-        if ($hasLocale || $hasTag || $hasKey || $hasContent) {
-            // Filter by locale (code)
-            if ($hasLocale) {
-                $query->whereHas('locale', function ($q) use ($request) {
-                    $q->where('code', $request->locale);
-                });
-            }
-
-            // Filter by tags (can be single id or array of ids)
-            if ($hasTag) {
-                $tags = is_array($request->tag) ? $request->tag : [$request->tag];
-                $query->whereHas('tags', function ($q) use ($tags) {
+        $query = Translation::query()->with([
+            'locale',
+            'tags' => function ($q) use ($tags) {
+                if ($tags) {
                     $q->whereIn('tags.id', $tags);
-                });
+                }
             }
+        ]);
 
-            // Filter by key (partial search)
-            if ($hasKey) {
-                $query->where('key', 'like', '%' . $request->key . '%');
-            }
+        // Locale filter
+        if ($locales) {
+            $query->whereHas('locale', fn($q) => $q->whereIn('code', $locales));
+        }
 
-            if ($hasContent) {
-                $query->where('value', 'like', '%' . $request->content . '%');
-            }
+        // Tag filter (ensure translations have at least one tag)
+        if ($tags) {
+            $query->whereHas('tags', fn($q) => $q->whereIn('tags.id', $tags));
+        }
+
+        // Key filter
+        if ($keys) {
+            $query->where(function ($q) use ($keys) {
+                foreach ($keys as $key) {
+                    $q->orWhere('key', 'like', "%$key%");
+                }
+            });
+        }
+
+        // Content filter
+        if ($contents) {
+            $query->where(function ($q) use ($contents) {
+                foreach ($contents as $content) {
+                    $q->orWhere('content', 'like', "%$content%");
+                }
+            });
         }
 
         $translations = $query->get();
 
         if ((int) $formatResponse === 1) {
-            $translations = self::formatData($translations);
+            $translations = self::formatData($translations, $tags);
         }
 
         return response()->json($translations);
@@ -64,39 +85,30 @@ class TranslationController extends Controller
         return response()->json($normalized);
     }
 
-    private function formatData(Collection $translations): array
+    private function formatData($translations, $allowedTags = null): array
     {
         $normalized = [];
-        foreach ($translations as $t) {
-            $localeCode = $t->locale->code;
+        foreach ($translations as $translation) {
+            $localeCode = $translation->locale->code;
 
-            if (!isset($normalized[$localeCode])) {
-                $normalized[$localeCode] = [];
-            }
-
-            // if no tags, put in a default 'all' group
-            $tags = $t->tags->pluck('name')->all() ?: ['all'];
-
-            foreach ($tags as $tag) {
-                if (!isset($normalized[$localeCode][$tag])) {
-                    $normalized[$localeCode][$tag] = [];
+            foreach ($translation->tags as $tag) {
+                // Skip tags not in allowed list
+                if ($allowedTags && !in_array($tag->id, $allowedTags)) {
+                    continue;
                 }
 
-                // Build nested structure from dot notation
-                $parts = explode('.', $t->key);
-                $ref = &$normalized[$localeCode][$tag];
+                $segments = explode('.', $translation->key);
+                $ref = &$normalized[$localeCode][$tag->name];
 
-                foreach ($parts as $i => $part) {
-                    if ($i === count($parts) - 1) {
-                        $ref[$part] = $t->content;
-                    } else {
-                        if (!isset($ref[$part])) {
-                            $ref[$part] = [];
-                        }
-                        $ref = &$ref[$part];
+                // Build nested array for dot notation keys
+                foreach ($segments as $segment) {
+                    if (!isset($ref[$segment])) {
+                        $ref[$segment] = [];
                     }
+                    $ref = &$ref[$segment];
                 }
 
+                $ref = $translation->content; // assign value
                 unset($ref); // break reference
             }
         }
