@@ -1,10 +1,9 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\LocaleController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TranslationController;
-
+use Illuminate\Support\Facades\Route;
 
 Route::get('locales', [LocaleController::class, 'index']);
 Route::post('locales', [LocaleController::class, 'storeOrUpdate']);

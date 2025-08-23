@@ -18,9 +18,9 @@ class TranslationController extends Controller
     public function index(Request $request)
     {
         // Filters
-        $locales  = $this->normalizeInput($request->locale);
-        $tags     = $this->normalizeInput($request->tag);
-        $keys     = $this->normalizeInput($request->key);
+        $locales = $this->normalizeInput($request->locale);
+        $tags = $this->normalizeInput($request->tag);
+        $keys = $this->normalizeInput($request->key);
         $contents = $this->normalizeInput($request->content);
 
         $formatResponse = (int) $request->query('format', '0');
@@ -36,17 +36,17 @@ class TranslationController extends Controller
                         if ($tags) {
                             $q->whereIn('tags.id', $tags);
                         }
-                    }
+                    },
                 ]);
 
                 // Locale filter
                 if ($locales) {
-                    $query->whereHas('locale', fn($q) => $q->whereIn('code', $locales));
+                    $query->whereHas('locale', fn ($q) => $q->whereIn('code', $locales));
                 }
 
                 // Tag filter (ensure translations have at least one tag)
                 if ($tags) {
-                    $query->whereHas('tags', fn($q) => $q->whereIn('tags.id', $tags));
+                    $query->whereHas('tags', fn ($q) => $q->whereIn('tags.id', $tags));
                 }
 
                 // Key filter
@@ -85,7 +85,7 @@ class TranslationController extends Controller
      */
     public function storeOrUpdate(TranslationRequest $request, ?Translation $translation = null): JsonResponse
     {
-        $translation = $translation ?? new Translation();
+        $translation = $translation ?? new Translation;
         $translation->fill($request->validated());
         $translation->save();
 
@@ -125,7 +125,7 @@ class TranslationController extends Controller
 
             foreach ($translation->tags as $tag) {
                 // Skip tags not in allowed list
-                if ($allowedTags && !in_array($tag->id, $allowedTags)) {
+                if ($allowedTags && ! in_array($tag->id, $allowedTags)) {
                     continue;
                 }
 
@@ -134,7 +134,7 @@ class TranslationController extends Controller
 
                 // Build nested array for dot notation keys
                 foreach ($segments as $segment) {
-                    if (!isset($ref[$segment])) {
+                    if (! isset($ref[$segment])) {
                         $ref[$segment] = [];
                     }
                     $ref = &$ref[$segment];
@@ -153,7 +153,10 @@ class TranslationController extends Controller
      */
     private function normalizeInput($input): ?array
     {
-        if (!$input) return null;
+        if (! $input) {
+            return null;
+        }
+
         return is_array($input) ? $input : explode(',', $input);
     }
 
@@ -162,11 +165,11 @@ class TranslationController extends Controller
      */
     private function generateCacheKey($locales, $tags, $keys, $contents, $format): string
     {
-        return 'translations_' . md5(
-            implode(',', $locales ?? []) . '|' .
-                implode(',', $tags ?? []) . '|' .
-                implode(',', $keys ?? []) . '|' .
-                implode(',', $contents ?? []) . '|' .
+        return 'translations_'.md5(
+            implode(',', $locales ?? []).'|'.
+                implode(',', $tags ?? []).'|'.
+                implode(',', $keys ?? []).'|'.
+                implode(',', $contents ?? []).'|'.
                 $format
         );
     }
