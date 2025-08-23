@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TranslationRequest;
 use App\Models\Translation;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 
 class TranslationController extends Controller
@@ -17,8 +18,14 @@ class TranslationController extends Controller
     public function formatted(): JsonResponse
     {
         $translations = Translation::with(['locale', 'tags'])->get();
-        $normalized = [];
+        $normalized = self::formatData($translations);
 
+        return response()->json($normalized);
+    }
+
+    private function formatData(Collection $translations): array
+    {
+        $normalized = [];
         foreach ($translations as $t) {
             $localeCode = $t->locale->code;
 
@@ -53,7 +60,7 @@ class TranslationController extends Controller
             }
         }
 
-        return response()->json($normalized);
+        return $normalized;
     }
 
     public function storeOrUpdate(TranslationRequest $request, ?Translation $translation = null): JsonResponse
