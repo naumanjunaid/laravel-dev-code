@@ -201,6 +201,44 @@ class TranslationController extends Controller
 
     /**
      * Normalize translations into nested JSON by locale and tag.
+     *
+     * @group Translations
+     *
+     * @queryParam locale string Filter by locale code(s). Example: fr,en
+     * @queryParam tag int Filter by tag ID(s). Example: 1,3
+     * @queryParam key string Filter by translation key(s). Example: checkout.title
+     * @queryParam content string Filter by content substring(s). Example: Paiement
+     * @queryParam format boolean Return nested JSON format if `1`. Example: 1
+     *
+     * @response 200 scenario="flat" [{
+     *   "id": 1,
+     *   "key": "checkout.title",
+     *   "content": "Paiement",
+     *   "locale": {
+     *     "id": 2,
+     *     "code": "fr",
+     *     "name": "French"
+     *   },
+     *   "tags": [
+     *     {"id": 1, "name": "mobile"},
+     *     {"id": 2, "name": "desktop"}
+     *   ]
+     * }]
+     * @response 200 scenario="nested" {
+     *   "fr": {
+     *     "mobile": {
+     *       "checkout": {
+     *         "title": "Paiement"
+     *       }
+     *     },
+     *     "desktop": {
+     *       "checkout": {
+     *         "title": "Paiement"
+     *       }
+     *     }
+     *   }
+     * }
+     * @response 401 {"message": "unauthenticated"}
      */
     private function formatData(Collection $translations, $allowedTags = null): array
     {
