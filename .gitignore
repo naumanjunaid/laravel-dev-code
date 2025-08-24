@@ -5,6 +5,8 @@
 /public/build
 /public/hot
 /public/storage
+/public/vendor/scribe
+/resources/views/scribe
 /storage/*.key
 /storage/pail
 /vendor
@@ -23,3 +25,4 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+.scribe/
