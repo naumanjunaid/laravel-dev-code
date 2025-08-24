@@ -7,6 +7,25 @@ use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
+    /**
+     * @group Authentication
+     *
+     * @unauthenticated
+     *
+     * POST /api/login
+     *
+     * @bodyParam email string required Example: test@example.com
+     * @bodyParam password string required Example: password
+     *
+     * @response 200 {
+     *   "message": "Login successful",
+     *   "access_token": "token_here",
+     *   "token_type": "Bearer"
+     * }
+     * @response 401 {
+     *   "message": "Invalid credentials"
+     * }
+     */
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -35,6 +54,20 @@ class AuthController extends Controller
         ], 401);
     }
 
+    /**
+     * @group Authentication
+     *
+     * @authenticated
+     *
+     * GET /api/logout
+     *
+     * @response 200 {
+     *   "message": "Logged out successfully"
+     * }
+     * @response 401 {
+     *   "message": "unauthenticated"
+     * }
+     */
     public function logout(Request $request)
     {
         // Get the authenticated user

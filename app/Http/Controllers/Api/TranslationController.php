@@ -13,7 +13,31 @@ use Illuminate\Support\Facades\Cache;
 class TranslationController extends Controller
 {
     /**
-     * List translations with optional filters and nested export.
+     * List translations (with optional filters).
+     *
+     * @group Translations
+     *
+     * @queryParam locale string Filter by locale code(s). Example: fr,en
+     * @queryParam tag int Filter by tag ID(s). Example: 1,3
+     * @queryParam key string Filter by translation key(s). Example: checkout.title
+     * @queryParam content string Filter by content substring(s). Example: Paiement
+     * @queryParam format boolean Return nested JSON format if `1`. Example: 1
+     *
+     * @response 200 scenario="success" [{
+     *   "id": 1,
+     *   "key": "checkout.title",
+     *   "content": "Paiement",
+     *   "locale": {
+     *     "id": 2,
+     *     "code": "fr",
+     *     "name": "French"
+     *   },
+     *   "tags": [
+     *     {"id": 1, "name": "mobile"},
+     *     {"id": 2, "name": "desktop"}
+     *   ]
+     * }]
+     * @response 401 {"message": "unauthenticated"}
      */
     public function index(Request $request)
     {
@@ -23,71 +47,125 @@ class TranslationController extends Controller
         $keys = $this->normalizeInput($request->key);
         $contents = $this->normalizeInput($request->content);
 
-        $formatResponse = (int) $request->query('format', '0');
+        $formatResponse = (int) $request->query('format', 0);
 
         $cacheKey = $this->generateCacheKey($locales, $tags, $keys, $contents, $formatResponse);
-        $translations = Cache::remember(
-            $cacheKey,
-            3600,
-            function () use ($locales, $tags, $keys, $contents, $formatResponse) {
-                $query = Translation::query()->with([
-                    'locale',
-                    'tags' => function ($q) use ($tags) {
-                        if ($tags) {
-                            $q->whereIn('tags.id', $tags);
-                        }
-                    },
-                ]);
 
-                // Locale filter
-                if ($locales) {
-                    $query->whereHas('locale', fn ($q) => $q->whereIn('code', $locales));
-                }
+        $translations = Cache::remember($cacheKey, 3600, function () use ($locales, $tags, $keys, $contents, $formatResponse) {
+            $query = Translation::query()->with([
+                'locale',
+                'tags' => function ($q) use ($tags) {
+                    if ($tags) {
+                        $q->whereIn('tags.id', $tags);
+                    }
+                },
+            ]);
 
-                // Tag filter (ensure translations have at least one tag)
-                if ($tags) {
-                    $query->whereHas('tags', fn ($q) => $q->whereIn('tags.id', $tags));
-                }
-
-                // Key filter
-                if ($keys) {
-                    $query->where(function ($q) use ($keys) {
-                        foreach ($keys as $key) {
-                            $q->orWhere('key', 'like', "%$key%");
-                        }
-                    });
-                }
-
-                // Content filter
-                if ($contents) {
-                    $query->where(function ($q) use ($contents) {
-                        foreach ($contents as $content) {
-                            $q->orWhere('content', 'like', "%$content%");
-                        }
-                    });
-                }
-
-                $translations = $query->get();
-
-                if ($formatResponse === 1) {
-                    $translations = self::formatData($translations, $tags);
-                }
-
-                return $translations;
+            // Locale filter
+            if ($locales) {
+                $query->whereHas('locale', fn ($q) => $q->whereIn('code', $locales));
             }
-        );
+
+            // Tag filter (ensure translations have at least one tag)
+            if ($tags) {
+                $query->whereHas('tags', fn ($q) => $q->whereIn('tags.id', $tags));
+            }
+
+            // Key filter
+            if ($keys) {
+                $query->where(function ($q) use ($keys) {
+                    foreach ($keys as $key) {
+                        $q->orWhere('key', 'like', "%$key%");
+                    }
+                });
+            }
+
+            // Content filter
+            if ($contents) {
+                $query->where(function ($q) use ($contents) {
+                    foreach ($contents as $content) {
+                        $q->orWhere('content', 'like', "%$content%");
+                    }
+                });
+            }
+
+            $translations = $query->get();
+
+            if ($formatResponse === 1) {
+                $translations = self::formatData($translations, $tags);
+            }
+
+            return $translations;
+        });
 
         return response()->json($translations);
     }
 
     /**
-     * Store or update a translation.
+     * Create a new translation.
+     *
+     * @group Translations
+     *
+     * @bodyParam key string required The translation key. Example: checkout.title
+     * @bodyParam content string required The translation content. Example: Paiement
+     * @bodyParam locale_id int required The locale ID. Example: 2
+     * @bodyParam tags array Optional list of tag IDs. Example: [1,2]
+     *
+     * @response 201 scenario="created" {
+     *   "id": 3,
+     *   "key": "checkout.title",
+     *   "content": "Paiement",
+     *   "locale_id": 2,
+     *   "locale": {"id": 2, "code": "fr", "name": "French"},
+     *   "tags": [{"id": 2, "name": "desktop"}, {"id": 3, "name": "web"}]
+     * }
+     * @response 401 {"message": "unauthenticated"}
      */
-    public function storeOrUpdate(TranslationRequest $request, ?Translation $translation = null): JsonResponse
+    public function store(TranslationRequest $request)
     {
-        $translation = $translation ?? new Translation;
-        $translation->fill($request->validated());
-        $translation->save();
+        return $this->storeOrUpdate($request);
+    }
+
+    /**
+     * Update an existing translation.
+     *
+     * @group Translations
+     *
+     * @urlParam id int required The ID of the translation. Example: 1
+     *
+     * @bodyParam key string The translation key. Example: checkout.title
+     * @bodyParam content string The translation content. Example: Paiements
+     * @bodyParam locale_id int The locale ID. Example: 2
+     * @bodyParam tags array Optional list of tag IDs. Example: [1,2]
+     *
+     * @response 200 scenario="updated" {
+     *   "id": 1,
+     *   "key": "checkout.title",
+     *   "content": "Paiements",
+     *   "locale_id": 2,
+     *   "locale": {"id": 2, "code": "fr", "name": "French"},
+     *   "tags": [{"id": 1, "name": "mobile"}, {"id": 2, "name": "desktop"}]
+     * }
+     * @response 422 {
+     *   "message": "The key has already been taken.",
+     *   "errors": {"key": ["The key has already been taken."]}
+     * }
+     * @response 401 {"message": "unauthenticated"}
+     */
+    public function update(TranslationRequest $request, $id)
+    {
+        return $this->storeOrUpdate($request, $id);
+    }
+
+    /**
+     * Internal helper to create or update a translation.
+     */
+    public function storeOrUpdate($request, $id = null): JsonResponse
+    {
+        $translation = Translation::updateOrCreate(
+            ['id' => $id],
+            $request->validated()
+        );
 
         // Sync tags if provided
         if ($request->has('tags')) {
@@ -103,6 +181,13 @@ class TranslationController extends Controller
 
     /**
      * Delete a translation.
+     *
+     * @group Translations
+     *
+     * @urlParam id int required The ID of the translation to delete. Example: 1
+     *
+     * @response 200 {"message": "Translation deleted"}
+     * @response 401 {"message": "unauthenticated"}
      */
     public function destroy(Translation $translation): JsonResponse
     {

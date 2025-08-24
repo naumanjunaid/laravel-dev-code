@@ -22,7 +22,7 @@ class TranslationRequest extends FormRequest
      */
     public function rules(): array
     {
-        $translationId = $this->route('translation');
+        $translationId = $this->route('id');
         $isUpdate = $translationId !== null;
 
         return [
@@ -31,8 +31,8 @@ class TranslationRequest extends FormRequest
                 'string',
                 'max:255',
                 Rule::unique('translations', 'key')
-                    ->where('locale_id', $this->input('locale_id'))
-                    ->ignore($translationId),
+                    ->where(fn ($query) => $query->where('locale_id', $this->input('locale_id')))
+                    ->ignore($translationId, 'id'),
             ],
             'content' => [$isUpdate ? 'sometimes' : 'required', 'string'],
             'locale_id' => [$isUpdate ? 'sometimes' : 'required', 'exists:locales,id'],

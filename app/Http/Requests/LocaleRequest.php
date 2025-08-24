@@ -22,7 +22,7 @@ class LocaleRequest extends FormRequest
      */
     public function rules(): array
     {
-        $localeId = $this->route('locale');
+        $localeId = $this->route('id');
 
         return [
             'code' => [
